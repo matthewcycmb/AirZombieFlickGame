@@ -16,7 +16,39 @@ export function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return { ...DEFAULT_SETTINGS };
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return { ...DEFAULT_SETTINGS };
+
+    // Validate each field individually to prevent tampering
+    return {
+      sensitivity:
+        typeof parsed.sensitivity === "number" &&
+        parsed.sensitivity >= -0.08 &&
+        parsed.sensitivity <= -0.005
+          ? parsed.sensitivity
+          : DEFAULT_SETTINGS.sensitivity,
+      flickCooldownMs:
+        typeof parsed.flickCooldownMs === "number" &&
+        parsed.flickCooldownMs >= 50 &&
+        parsed.flickCooldownMs <= 500
+          ? parsed.flickCooldownMs
+          : DEFAULT_SETTINGS.flickCooldownMs,
+      difficulty:
+        parsed.difficulty === "easy" ||
+        parsed.difficulty === "normal" ||
+        parsed.difficulty === "hard"
+          ? parsed.difficulty
+          : DEFAULT_SETTINGS.difficulty,
+      muted:
+        typeof parsed.muted === "boolean"
+          ? parsed.muted
+          : DEFAULT_SETTINGS.muted,
+      playerName:
+        typeof parsed.playerName === "string" &&
+        parsed.playerName.length <= 32
+          ? parsed.playerName
+          : DEFAULT_SETTINGS.playerName,
+    };
   } catch {
     return { ...DEFAULT_SETTINGS };
   }
