@@ -1,9 +1,73 @@
-import { Zombie } from "@/lib/types";
-import { ZOMBIE_HIT_RADIUS } from "@/lib/constants";
+import { Zombie, ZombieType } from "@/lib/types";
+
+interface ZombieAABB {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  centerX: number;
+  centerY: number;
+}
+
+/**
+ * Compute a generous AABB for a zombie that covers the full rendered body
+ * including arms, claws, and head decorations.
+ *
+ * Renderer reference (drawZombieBody):
+ *   - Head center: y = -bh*0.32, radius = bw*0.22 (boss: bw*0.25)
+ *   - Boss horns extend to headR*1.5 above head center
+ *   - Legs bottom: y = +bh*0.43
+ *   - Arm reach: 0.48*bw (normal), 0.55*bw (boss) + claws ~8*s beyond
+ *   - Body bob: up to bh*0.012 (covered by margin)
+ *
+ * All values include a 10% forgiving margin so near-misses still register.
+ */
+function getZombieAABB(z: Zombie): ZombieAABB {
+  const s = z.screenScale;
+  const bw = z.width * s;
+  const bh = z.height * s;
+
+  let halfW: number;
+  let topOffset: number;   // distance above z.y
+  const bottomOffset = bh * 0.45;  // legs + shadow
+
+  const type: ZombieType = z.zombieType;
+
+  if (type === "boss") {
+    // Boss: wide arms + claws, horns above head
+    const headR = bw * 0.25;
+    halfW = bw * 0.65;
+    topOffset = bh * 0.32 + headR * 1.6;
+  } else if (type === "tank") {
+    // Tank: bulkier shoulders + arms
+    const headR = bw * 0.22;
+    halfW = bw * 0.55;
+    topOffset = bh * 0.32 + headR * 1.2;
+  } else {
+    // basic, fast, exploder — arms reach bw*0.48 + claws
+    const headR = bw * 0.22;
+    halfW = bw * 0.55;
+    topOffset = bh * 0.32 + headR * 1.2;
+  }
+
+  // 10% forgiving margin
+  halfW *= 1.10;
+  const top = z.y - topOffset * 1.10;
+  const bottom = z.y + bottomOffset * 1.10;
+
+  return {
+    left: z.x - halfW,
+    right: z.x + halfW,
+    top,
+    bottom,
+    centerX: z.x,
+    centerY: (top + bottom) / 2,
+  };
+}
 
 /**
  * Find the closest zombie to a screen-space point (aimX, aimY).
- * Uses each zombie's computed screen position and scale-adjusted hit radius.
+ * Uses type-specific AABB matching the rendered zombie body.
  * Prefers the zombie closest to the aim point if multiple overlap.
  */
 export function findClosestZombieAtPoint(
@@ -16,17 +80,30 @@ export function findClosestZombieAtPoint(
 
   for (const z of zombies) {
     if (!z.alive) continue;
-    // Hit radius scales with perspective
-    const hitR = ZOMBIE_HIT_RADIUS * z.screenScale;
-    // Zombie's screen-space bounding is centered at (z.x, z.y) with its scaled dimensions
-    const scaledH = z.height * z.screenScale;
-    // The zombie sprite is drawn centered at (z.x, z.y) with body above and legs below
-    // Check distance to the zombie's centre area
-    const dx = z.x - aimX;
-    const dy = (z.y - scaledH * 0.15) - aimY; // offset up slightly since visual centre is above y
+    const bb = getZombieAABB(z);
+
+    // AABB containment — point inside bounding box
+    if (aimX >= bb.left && aimX <= bb.right &&
+        aimY >= bb.top && aimY <= bb.bottom) {
+      const dx = bb.centerX - aimX;
+      const dy = bb.centerY - aimY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < closestDist) {
+        closest = z;
+        closestDist = dist;
+      }
+      continue;
+    }
+
+    // Proximity fallback — allow slight near-misses
+    const dx = bb.centerX - aimX;
+    const dy = bb.centerY - aimY;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    const maxDist = hitR + Math.max(z.width, z.height) * z.screenScale * 0.35;
-    if (dist < maxDist && dist < closestDist) {
+    const boxHalfDiag = Math.sqrt(
+      ((bb.right - bb.left) / 2) ** 2 + ((bb.bottom - bb.top) / 2) ** 2
+    );
+    // Accept within 30% beyond the bounding box diagonal
+    if (dist < boxHalfDiag * 1.30 && dist < closestDist) {
       closest = z;
       closestDist = dist;
     }
@@ -37,7 +114,7 @@ export function findClosestZombieAtPoint(
 
 /**
  * Raycast from a point in a direction and find the first zombie hit.
- * Uses screen-space zombie positions with scale-adjusted bounding boxes.
+ * Uses type-specific AABB matching the rendered zombie body.
  */
 export function raycastFromPoint(
   zombies: Zombie[],
@@ -51,34 +128,28 @@ export function raycastFromPoint(
 
   for (const z of zombies) {
     if (!z.alive) continue;
-
-    const halfW = (z.width * z.screenScale) / 2;
-    const halfH = (z.height * z.screenScale) / 2;
-    const left = z.x - halfW;
-    const right = z.x + halfW;
-    const top = z.y - halfH;
-    const bottom = z.y + halfH * 0.4; // legs area is shorter
+    const bb = getZombieAABB(z);
 
     let tMin = 0;
     let tMax = 10000;
 
     if (Math.abs(dirX) > 1e-8) {
-      let t1 = (left - originX) / dirX;
-      let t2 = (right - originX) / dirX;
+      let t1 = (bb.left - originX) / dirX;
+      let t2 = (bb.right - originX) / dirX;
       if (t1 > t2) [t1, t2] = [t2, t1];
       tMin = Math.max(tMin, t1);
       tMax = Math.min(tMax, t2);
-    } else if (originX < left || originX > right) {
+    } else if (originX < bb.left || originX > bb.right) {
       continue;
     }
 
     if (Math.abs(dirY) > 1e-8) {
-      let t1 = (top - originY) / dirY;
-      let t2 = (bottom - originY) / dirY;
+      let t1 = (bb.top - originY) / dirY;
+      let t2 = (bb.bottom - originY) / dirY;
       if (t1 > t2) [t1, t2] = [t2, t1];
       tMin = Math.max(tMin, t1);
       tMax = Math.min(tMax, t2);
-    } else if (originY < top || originY > bottom) {
+    } else if (originY < bb.top || originY > bb.bottom) {
       continue;
     }
 
@@ -104,13 +175,14 @@ export function findZombiesInRadius(
   const result: Zombie[] = [];
   for (const z of zombies) {
     if (!z.alive) continue;
-    const scaledH = z.height * z.screenScale;
-    const dx = z.x - centerX;
-    const dy = (z.y - scaledH * 0.15) - centerY;
+    const bb = getZombieAABB(z);
+    const dx = bb.centerX - centerX;
+    const dy = bb.centerY - centerY;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    const hitR = ZOMBIE_HIT_RADIUS * z.screenScale;
-    const maxDist = hitR + Math.max(z.width, z.height) * z.screenScale * 0.35 + radius;
-    if (dist < maxDist) {
+    const boxHalfDiag = Math.sqrt(
+      ((bb.right - bb.left) / 2) ** 2 + ((bb.bottom - bb.top) / 2) ** 2
+    );
+    if (dist < boxHalfDiag + radius) {
       result.push(z);
     }
   }

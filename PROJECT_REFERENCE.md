@@ -317,6 +317,12 @@ interface Zombie {
 - **Thumb acceptable:** Hand-scale-relative distances (thumb tip within 2x handScale of index MCP, thumb somewhat extended)
 - Uses `angleBetween(a, b, c)` — dot product of 3D bone vectors — works regardless of hand rotation
 
+### Hand-Distance Normalization
+- Aim coordinates are scaled by inverse hand size (wrist-to-middle-MCP 2D distance)
+- Reference hand size: 0.14 (comfortable mid-range), scale factor clamped to [0.7, 2.0]
+- Hand size smoothed via EMA (alpha=0.35) to prevent jumps when moving toward/away from camera
+- Result: consistent aiming range regardless of hand distance from webcam
+
 ### Two-Stage Smoothing Pipeline
 1. **EMA landmark smoothing** (alpha=0.55) in `gestureDetector.ts` — all 21 landmarks smoothed every frame
 2. **Aim position lerp** (alpha=0.35) in `GameCanvas.tsx` — crosshair glides toward target
@@ -382,6 +388,7 @@ interface Zombie {
 - Canvas-rendered score with glow/animation + wave announcements + high score tracking
 - PIP webcam (220x165) in top-center
 - Two-stage aim smoothing: EMA landmarks (0.55) + aim lerp (0.35)
+- Hand-distance normalization: aim scaled by inverse hand size for consistent range at any camera distance
 - Crosshair never snaps to center — holds last known position when tracking lost
 - Joint-angle-based gesture detection with hysteresis
 - Mouse click works as fallback fire mechanism

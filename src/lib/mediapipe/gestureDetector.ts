@@ -41,6 +41,13 @@ const POSE_OFF_FRAMES = 4;  // frames to confirm gun pose lost (more lenient)
 // Higher = more responsive but jittery, lower = smoother but laggy
 const LANDMARK_SMOOTH_ALPHA = 0.55;
 
+// Hand-distance normalization: scale aim offset by inverse hand size
+// so aiming feels consistent regardless of distance from camera
+const HAND_SIZE_REF = 0.14;           // reference 2D hand size at comfortable mid-range
+const HAND_SIZE_SMOOTH_ALPHA = 0.35;  // EMA for hand size (stable, prevents scale jumps)
+const SCALE_FACTOR_MIN = 0.7;         // min scale (close hand)
+const SCALE_FACTOR_MAX = 2.0;         // max scale (far hand)
+
 export class GestureDetector {
   private yHistory: number[] = [];
   private readonly maxHistory = 7;
@@ -48,6 +55,7 @@ export class GestureDetector {
   private poseState = false;          // current confirmed pose state
   private poseCandidate = false;      // what the raw detection is saying
   private poseCandidateFrames = 0;    // how many frames candidate has been consistent
+  private smoothedHandSize2D: number | null = null;
 
   update(landmarks: Landmark[]): GestureResult {
     if (!landmarks || landmarks.length < 21) {
@@ -60,6 +68,17 @@ export class GestureDetector {
     this.smoothedLandmarks = smoothed;
 
     const wrist = smoothed[WRIST];
+
+    // Compute 2D hand size for distance normalization
+    const middleMcp = smoothed[MIDDLE_MCP];
+    const handSize2D = Math.sqrt(
+      (middleMcp.x - wrist.x) ** 2 + (middleMcp.y - wrist.y) ** 2
+    );
+    if (this.smoothedHandSize2D === null) {
+      this.smoothedHandSize2D = handSize2D;
+    } else {
+      this.smoothedHandSize2D += HAND_SIZE_SMOOTH_ALPHA * (handSize2D - this.smoothedHandSize2D);
+    }
 
     // Check finger-gun pose using joint angles
     const indexExtended = isFingerExtended(
@@ -114,11 +133,19 @@ export class GestureDetector {
 
     const flickVelocity = computeVelocityY(this.yHistory);
 
+    // Normalize aim by inverse hand size so distance from camera doesn't matter
+    const scaleFactor = Math.max(
+      SCALE_FACTOR_MIN,
+      Math.min(SCALE_FACTOR_MAX, HAND_SIZE_REF / this.smoothedHandSize2D!)
+    );
+    const adjustedX = Math.max(0, Math.min(1, 0.5 + (indexTip.x - 0.5) * scaleFactor));
+    const adjustedY = Math.max(0, Math.min(1, 0.5 + (indexTip.y - 0.5) * scaleFactor));
+
     return {
       isFingerGun,
       flickVelocity,
-      indexTipX: indexTip.x,
-      indexTipY: indexTip.y,
+      indexTipX: adjustedX,
+      indexTipY: adjustedY,
     };
   }
 
@@ -158,6 +185,7 @@ export class GestureDetector {
   reset(): void {
     this.yHistory = [];
     this.smoothedLandmarks = null;
+    this.smoothedHandSize2D = null;
     this.poseState = false;
     this.poseCandidate = false;
     this.poseCandidateFrames = 0;
