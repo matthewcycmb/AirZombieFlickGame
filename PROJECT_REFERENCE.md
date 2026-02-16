@@ -86,6 +86,17 @@ Camera frame
   → processKill() — score, combo, power-up drop, recoil, SFX
 ```
 
+### Camera Gate (Start Flow)
+- "Start Game" validates name, activates camera, sets `pendingStartRef = true`
+- Game does NOT start countdown until `trackerStatus === "running"` (camera granted + MediaPipe loaded)
+- On restart (tracker already running), countdown starts immediately
+- Camera-denied/error overlays block gameplay with retry/quit options
+
+### Mobile Tracking
+- Auto-detects mobile via `navigator.userAgent`
+- Mobile: `delegate: "CPU"` + `ideal` camera constraints (640x480, 30fps)
+- Desktop: `delegate: "GPU"` + exact constraints (unchanged from original)
+
 ### SSR Safety
 - `HandTracker.tsx` imported via `next/dynamic({ ssr: false })`
 - `@mediapipe/tasks-vision` dynamically imported inside `useEffect`
@@ -396,3 +407,6 @@ interface Zombie {
 - Leaderboard page with top 10 scores (Supabase or localStorage)
 - Settings persist to localStorage
 - Muzzle flash at pistol barrel tip
+- Video-game-style landing page and idle screen (glowing title, animated buttons, atmospheric fog CSS)
+- Camera gate: game countdown only starts after camera permission granted AND hand tracker running
+- Mobile tracking: CPU delegate + ideal camera constraints for mobile; GPU delegate unchanged for desktop

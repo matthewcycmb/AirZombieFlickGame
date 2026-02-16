@@ -102,3 +102,49 @@
     line-height: 24px;
   }
 }
+
+/* Game menu animations */
+@keyframes title-glow {
+  0%, 100% { text-shadow: 0 0 20px #FF5A5F88, 0 0 40px #FF5A5F44, 0 0 80px #FF5A5F22; }
+  50% { text-shadow: 0 0 30px #FF5A5FBB, 0 0 60px #FF5A5F66, 0 0 100px #FF5A5F33; }
+}
+
+@keyframes subtitle-flicker {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+@keyframes menu-btn-glow {
+  0%, 100% { box-shadow: 0 0 8px #0B63FF44, inset 0 1px 0 #ffffff22; }
+  50% { box-shadow: 0 0 16px #0B63FF88, inset 0 1px 0 #ffffff33; }
+}
+
+@keyframes fog-drift {
+  0% { transform: translateX(-20%) translateY(0); opacity: 0.03; }
+  50% { transform: translateX(20%) translateY(-10px); opacity: 0.06; }
+  100% { transform: translateX(-20%) translateY(0); opacity: 0.03; }
+}
+
+.game-title {
+  animation: title-glow 3s ease-in-out infinite;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.game-subtitle {
+  animation: subtitle-flicker 4s ease-in-out infinite;
+}
+
+.game-menu-btn {
+  animation: menu-btn-glow 2.5s ease-in-out infinite;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.game-menu-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 24px #0B63FFBB, inset 0 1px 0 #ffffff44;
+}
+
+.game-fog {
+  animation: fog-drift 12s ease-in-out infinite;
+  pointer-events: none;
+}

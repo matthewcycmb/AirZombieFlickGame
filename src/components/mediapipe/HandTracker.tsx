@@ -44,9 +44,13 @@ const HandTracker = forwardRef<HandTrackerHandle, HandTrackerProps>(
         try {
           onStatusChange("requesting-camera");
 
+          const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
           try {
             stream = await navigator.mediaDevices.getUserMedia({
-              video: { facingMode: "user", width: 640, height: 480 },
+              video: isMobile
+                ? { facingMode: { ideal: "user" }, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 } }
+                : { facingMode: "user", width: 640, height: 480 },
             });
           } catch {
             onStatusChange("camera-denied");
@@ -82,7 +86,7 @@ const HandTracker = forwardRef<HandTrackerHandle, HandTrackerProps>(
               baseOptions: {
                 modelAssetPath:
                   "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
-                delegate: "GPU",
+                delegate: isMobile ? "CPU" : "GPU",
               },
               runningMode: "VIDEO",
               numHands: 1,

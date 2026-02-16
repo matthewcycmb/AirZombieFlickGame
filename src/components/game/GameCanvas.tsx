@@ -63,6 +63,7 @@ export default function GameCanvas() {
   const handTrackerRef = useRef<HandTrackerHandle | null>(null);
   const aimPositionRef = useRef<{ x: number; y: number } | null>(null);
   const aimTargetRef = useRef<{ x: number; y: number } | null>(null);
+  const pendingStartRef = useRef(false);
 
   const [phase, setPhase] = useState<GamePhase>("idle");
   const [health, setHealth] = useState(100);
@@ -366,22 +367,9 @@ export default function GameCanvas() {
     [handleFire]
   );
 
-  // Start game
-  const handleStartGame = useCallback(() => {
-    const result = leaderboardNameSchema.safeParse(playerName.trim());
-    if (!result.success) {
-      setNameError("Name must be 1-32 characters, letters or numbers only.");
-      return;
-    }
-    setNameError("");
-
-    const settings = loadSettings();
-    settings.playerName = result.data;
-    saveSettings(settings);
-    setPlayerName(result.data);
-
-    initAudio();
-    settingsRef.current = settings;
+  // Begin countdown (called once tracker is confirmed running)
+  const beginCountdown = useCallback(() => {
+    const settings = settingsRef.current;
     const state = createInitialState();
     state.phase = "wave-countdown";
     state.waveCountdownUntil = Date.now() + 3000;
@@ -391,7 +379,6 @@ export default function GameCanvas() {
     setScore(0);
     setWave(1);
     setIsBossWave(false);
-    setCameraActive(true);
     lastHandSeenRef.current = Date.now();
     lastPoseSeenRef.current = Date.now();
     gestureDetectorRef.current.reset();
@@ -408,7 +395,33 @@ export default function GameCanvas() {
         playZombieGroan();
       }
     }, 3000);
-  }, [playerName]);
+  }, []);
+
+  // Start game — validates name, activates camera, waits for tracker
+  const handleStartGame = useCallback(() => {
+    const result = leaderboardNameSchema.safeParse(playerName.trim());
+    if (!result.success) {
+      setNameError("Name must be 1-32 characters, letters or numbers only.");
+      return;
+    }
+    setNameError("");
+
+    const settings = loadSettings();
+    settings.playerName = result.data;
+    saveSettings(settings);
+    setPlayerName(result.data);
+
+    initAudio();
+    settingsRef.current = settings;
+    pendingStartRef.current = true;
+    setCameraActive(true);
+
+    // If tracker is already running (e.g., restart), start immediately
+    if (trackerStatus === "running") {
+      pendingStartRef.current = false;
+      beginCountdown();
+    }
+  }, [playerName, trackerStatus, beginCountdown]);
 
   // Pause/Resume with P key
   useEffect(() => {
@@ -439,7 +452,11 @@ export default function GameCanvas() {
 
   const handleTrackerStatus = useCallback((status: TrackerStatus) => {
     setTrackerStatus(status);
-  }, []);
+    if (status === "running" && pendingStartRef.current) {
+      pendingStartRef.current = false;
+      beginCountdown();
+    }
+  }, [beginCountdown]);
 
   return (
     <div className="relative flex items-center justify-center w-full h-screen bg-game-bg overflow-hidden">
@@ -516,17 +533,20 @@ export default function GameCanvas() {
         </div>
       )}
 
-      {/* Idle state — name input + start */}
-      {phase === "idle" && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60">
-          <h2 className="text-3xl font-bold text-white mb-4">Ready to Play</h2>
-          <p className="text-muted-foreground mb-2 text-center max-w-sm">
-            Use a finger-gun gesture to aim and flick to fire. You can also click to shoot.
+      {/* Idle state — name input + start (hidden while camera is loading) */}
+      {phase === "idle" && !cameraActive && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 z-40">
+          <h2 className="game-title text-4xl sm:text-5xl font-black text-game-danger mb-2 tracking-widest">
+            Zombie Flick
+          </h2>
+          <p className="game-subtitle text-gray-400 mb-6 text-center max-w-sm tracking-wide">
+            Aim with your hand. Flick to kill.
           </p>
-          <p className="text-muted-foreground mb-4 text-sm">Press P to pause.</p>
+
+          <div className="w-40 h-px bg-gradient-to-r from-transparent via-game-danger/40 to-transparent mb-6" />
 
           <div className="flex flex-col gap-2 mb-6 w-72">
-            <label className="text-white text-sm font-medium">Player Name</label>
+            <label className="text-gray-300 text-sm font-medium tracking-wide uppercase">Player Name</label>
             <input
               type="text"
               value={playerName}
@@ -534,17 +554,19 @@ export default function GameCanvas() {
               onKeyDown={(e) => { if (e.key === "Enter") handleStartGame(); }}
               maxLength={32}
               placeholder="Enter your name"
-              className="w-full rounded-lg border border-gray-500 bg-black/40 px-4 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-game-primary"
+              className="w-full rounded-lg border border-white/15 bg-white/5 px-4 py-3 text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-game-danger/60 tracking-wide"
             />
             {nameError && <p className="text-sm text-game-danger">{nameError}</p>}
           </div>
 
           <button
             onClick={handleStartGame}
-            className="rounded-lg bg-game-primary px-8 py-3 text-lg font-semibold text-white hover:bg-game-primary/90 transition-colors"
+            className="game-menu-btn rounded-lg bg-game-danger/90 border border-game-danger/50 px-10 py-3 text-lg font-bold text-white tracking-wider uppercase"
           >
             Start Game
           </button>
+
+          <p className="text-xs text-gray-600 mt-6 tracking-wide">Press P to pause during gameplay</p>
         </div>
       )}
 
