@@ -32,11 +32,16 @@ export function getZombieCountForWave(
   config: DifficultyConfig,
   isBossWave: boolean = false
 ): number {
+  // Base count: initial + per-wave increase
   const base = config.initialZombies + (wave - 1) * config.extraPerWave;
+  // Add 1 extra zombie every 5 waves for escalating difficulty
+  const waveBonus = Math.floor(wave / 5);
+  const total = base + waveBonus;
+
   if (isBossWave) {
-    return Math.max(2, Math.floor(base * BOSS_WAVE_REGULAR_ZOMBIE_FRACTION));
+    return Math.max(2, Math.floor(total * BOSS_WAVE_REGULAR_ZOMBIE_FRACTION));
   }
-  return base;
+  return total;
 }
 
 /**
