@@ -80,18 +80,25 @@ const HandTracker = forwardRef<HandTrackerHandle, HandTrackerProps>(
 
           if (cancelled) return;
 
-          const handLandmarker = await HandLandmarker.createFromOptions(
-            vision,
-            {
-              baseOptions: {
-                modelAssetPath:
-                  "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
-                delegate: isMobile ? "CPU" : "GPU",
-              },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          let handLandmarker: any;
+          const modelPath = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
+          const preferredDelegate = isMobile ? "CPU" : "GPU";
+
+          try {
+            handLandmarker = await HandLandmarker.createFromOptions(vision, {
+              baseOptions: { modelAssetPath: modelPath, delegate: preferredDelegate },
               runningMode: "VIDEO",
               numHands: 1,
-            }
-          );
+            });
+          } catch {
+            // GPU delegate can fail on some devices — fall back to CPU
+            handLandmarker = await HandLandmarker.createFromOptions(vision, {
+              baseOptions: { modelAssetPath: modelPath, delegate: "CPU" },
+              runningMode: "VIDEO",
+              numHands: 1,
+            });
+          }
 
           if (cancelled) return;
 
