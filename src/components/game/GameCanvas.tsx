@@ -280,7 +280,8 @@ export default function GameCanvas() {
     }
   }, [processKill]);
 
-  const AIM_LERP_SPEED = 0.35;
+  const IS_MOBILE = typeof navigator !== "undefined" && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  const AIM_LERP_SPEED = IS_MOBILE ? 0.55 : 0.35;
 
   // MediaPipe frame callback
   const handleFrame = useCallback(

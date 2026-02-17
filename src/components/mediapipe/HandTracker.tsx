@@ -49,7 +49,7 @@ const HandTracker = forwardRef<HandTrackerHandle, HandTrackerProps>(
           try {
             stream = await navigator.mediaDevices.getUserMedia({
               video: isMobile
-                ? { facingMode: { ideal: "user" }, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 } }
+                ? { facingMode: { ideal: "user" }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } }
                 : { facingMode: "user", width: 640, height: 480 },
             });
           } catch {

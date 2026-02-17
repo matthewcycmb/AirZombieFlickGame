@@ -39,7 +39,9 @@ const POSE_OFF_FRAMES = 4;  // frames to confirm gun pose lost (more lenient)
 
 // EMA smoothing factor for landmarks (0 = frozen, 1 = raw/no smoothing)
 // Higher = more responsive but jittery, lower = smoother but laggy
-const LANDMARK_SMOOTH_ALPHA = 0.55;
+// Mobile uses higher alpha to compensate for lower CPU detection frame rate
+const IS_MOBILE = typeof navigator !== "undefined" && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+const LANDMARK_SMOOTH_ALPHA = IS_MOBILE ? 0.75 : 0.55;
 
 // Hand-distance normalization: scale aim offset by inverse hand size
 // so aiming feels consistent regardless of distance from camera
